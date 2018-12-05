@@ -111,16 +111,23 @@ object Utils {
         return BufferedImage(cm, raster, isAlphaPremultiplied, null)
     }
 
-    fun handleImage(userID: String, photoID:String, inputstream: InputStream){
+    fun handleImage(userID: String, photoID:String, inputstream: InputStream):Pair<File,File>{
 
         val userFolder = File(Main.picFolder, userID)
         val originalFolder = File(userFolder, "original")
         val thumbFolder = File(userFolder, "thumb")
 
         val originalPhotoFile = File(originalFolder, photoID)
+        thumbFolder.mkdirs()
+        originalFolder.mkdirs()
 
         inputstream.use { // getPart needs to use same "name" as input field in form
-            input -> Files.copy(input, originalPhotoFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            input ->
+            try {
+                 Files.copy(input, originalPhotoFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }catch(e:Exception){
+                println(e.message)
+            }
         }
 
 
@@ -172,6 +179,7 @@ object Utils {
         ImageIO.write(scaledImg, "jpeg", thumbPhotoFile)
         val dimensions = Utils.readDimensions(thumbPhotoFile)
 
+        return Pair(originalPhotoFile, thumbPhotoFile)
     }
 
     object Token {

@@ -1,15 +1,8 @@
 package io.dancmc.photobackup
 
-import kotlinx.coroutines.experimental.launch
-import org.json.JSONArray
 import org.json.JSONObject
-import org.neo4j.graphdb.Label
-import org.neo4j.graphdb.Node
-import org.neo4j.graphdb.RelationshipType
-import org.neo4j.graphdb.Result
 import spark.Route
 import java.util.*
-import javax.servlet.MultipartConfigElement
 
 object UserRoutes {
     val register = Route { request, response ->

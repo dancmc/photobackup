@@ -15,9 +15,9 @@ import spark.Spark
 class Main {
 
     companion object {
-        val picRoute = "/instacopy/files"
+        val picNginxRoute = "/photobackup/files"
         val picFolder = "/users/daniel/downloads/photobackup/photos"
-        val domain = "http://10.0.0.1:8080/photobackup/v1"
+        val domain = "http://localhost:8080/photobackup/v1"
         val databaseLocation = "/users/daniel/downloads/photobackup/photobackup_neo4j"
 //        val picFolder = "/mnt/www/instacopy/photos"
 //        val domain = "https://dancmc.io/instacopy/v1"
@@ -60,6 +60,9 @@ class Main {
 
                 Spark.path("/photo") {
                     Spark.get("/complete", PhotoRoutes.complete)
+                    Spark.post("/upload", PhotoRoutes.upload)
+                    Spark.post("/delete", PhotoRoutes.delete)
+                    Spark.post("/edit", PhotoRoutes.edit)
                 }
 
                 Spark.path("/static") {

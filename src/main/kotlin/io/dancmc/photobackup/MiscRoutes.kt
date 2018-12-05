@@ -15,7 +15,7 @@ object MiscRoutes {
 //        return Pair("match (:User{user_id:\$user_id})-[:OWNS]->(:Photo{photo_id:\$photo_id})<-[c:CONTAINS]-(f:FOLDER)\n" +
 //                "return f.path as folder_path, c.filename as filename LIMIT 1" , params)
         return Pair("match (p:Photo{photo_id:\$photo_id})\n" +
-                "return EXISTS((:User{user_id:\$user_id})-[:OWNS]->(p) as ownership", params)
+                "return EXISTS((:User{user_id:\$user_id})-[:OWNS]->(p)) as ownership", params)
     }
 
     // redirects from danielchan.io/instacopy/photos?size=small&id=qwerty to nginx /instacopy/files/small/qwerty.jpg
@@ -47,7 +47,7 @@ object MiscRoutes {
 
         // (for original) get the photo node, retrieve the first folder name and filename, construct path and send to nginx
         // for thumb, just directly construct thumb path
-        val userFolder = File(Main.picRoute, userID)
+        val userFolder = File(Main.picNginxRoute, userID)
         val sizeFolder = File(userFolder, sizeParam)
         val finalFile = File(sizeFolder, photoID)
 
