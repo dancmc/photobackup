@@ -48,6 +48,8 @@ object PhotoRoutes {
                     photoObject.put("photo_id", photoNode.getProperty("photo_id") as String)
                     photoObject.put("notes_updated", photoNode.getProperty("notes_updated") as Long)
                     photoObject.put("tags_updated", photoNode.getProperty("tags_updated") as Long)
+                    photoObject.put("mime", photoNode.getProperty("mime") as String)
+                    photoObject.put("is_video", photoNode.getProperty("is_video") as Boolean)
                     photoObject.put("deleted", deleted)
 
 
@@ -116,9 +118,11 @@ object PhotoRoutes {
             tagArray.forEach { tag -> this.add(tag as String) }
         }
         val tagsUpdated = requestJson.optLong("tags_updated")
-
         val notes = requestJson.optString("notes")
         val notesUpdated = requestJson.optLong("notes_updated")
+
+        val mime = requestJson.optString("mime")
+        val isVideo = requestJson.optBoolean("is_video")
 
         // check that md5 not registered already
         var deleted = false
@@ -152,7 +156,7 @@ object PhotoRoutes {
         }
 
         val photoID = UUID.randomUUID().toString()
-        val savedFiles = Utils.handleImage(userID, photoID, filepart.inputStream)
+        val savedFiles = Utils.handleImage(userID, photoID, filepart.inputStream, isVideo)
         if (reportedMD5 == MD5.calculateMD5(savedFiles.first)) {
 
             Database.executeTransaction {
@@ -163,6 +167,8 @@ object PhotoRoutes {
                 photoNode.setProperty("notes", notes)
                 photoNode.setProperty("notes_updated", notesUpdated)
                 photoNode.setProperty("tags_updated", tagsUpdated)
+                photoNode.setProperty("mime", mime)
+                photoNode.setProperty("is_video", isVideo)
                 photoNode.setProperty("deleted", false)
 
                 val userNode = it.findNode({ "User" }, "user_id", userID)

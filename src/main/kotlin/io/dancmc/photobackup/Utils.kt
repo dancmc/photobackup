@@ -111,7 +111,7 @@ object Utils {
         return BufferedImage(cm, raster, isAlphaPremultiplied, null)
     }
 
-    fun handleImage(userID: String, photoID:String, inputstream: InputStream):Pair<File,File>{
+    fun handleImage(userID: String, photoID:String, inputstream: InputStream, isVideo:Boolean):Pair<File,File>{
 
         val userFolder = File(Main.picFolder, userID)
         val originalFolder = File(userFolder, "original")
@@ -130,54 +130,59 @@ object Utils {
             }
         }
 
-
-        val originalImage = ImageIO.read(originalPhotoFile)
-        var scaledImg = Scalr.resize(originalImage, 200)
-
-        // ---- Begin orientation handling ----
-        val metadata = ImageMetadataReader.readMetadata(originalPhotoFile)
-        val exifIFD0Directory = metadata.getFirstDirectoryOfType(ExifIFD0Directory::class.java)
-
-        var orientation = 1
-        try {
-            orientation = exifIFD0Directory.getInt(ExifIFD0Directory.TAG_ORIENTATION)
-        } catch (ex: Exception) {
-            println("no orientation data")
-        }
-
-
-        when (orientation) {
-            1 -> {
-            }
-            2 // Flip X
-            -> scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_HORZ)
-            3 // PI rotation
-            -> scaledImg = Scalr.rotate(scaledImg, Rotation.CW_180)
-            4 // Flip Y
-            -> scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_VERT)
-            5 // - PI/2 and Flip X
-            -> {
-                scaledImg = Scalr.rotate(scaledImg, Rotation.CW_90)
-                scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_HORZ)
-            }
-            6 // -PI/2 and -width
-            -> scaledImg = Scalr.rotate(scaledImg, Rotation.CW_90)
-            7 // PI/2 and Flip
-            -> {
-                scaledImg = Scalr.rotate(scaledImg, Rotation.CW_90)
-                scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_VERT)
-            }
-            8 // PI / 2
-            -> scaledImg = Scalr.rotate(scaledImg, Rotation.CW_270)
-            else -> {
-            }
-        }
-        // ---- End orientation handling ----
-
-
         val thumbPhotoFile = File(thumbFolder, photoID)
-        ImageIO.write(scaledImg, "jpeg", thumbPhotoFile)
-        val dimensions = Utils.readDimensions(thumbPhotoFile)
+        if (isVideo){
+
+            // TODO create thumbnail with ffmpeg
+
+
+        }else {
+
+            val originalImage = ImageIO.read(originalPhotoFile)
+            var scaledImg = Scalr.resize(originalImage, 200)
+
+            // ---- Begin orientation handling ----
+            val metadata = ImageMetadataReader.readMetadata(originalPhotoFile)
+            val exifIFD0Directory = metadata.getFirstDirectoryOfType(ExifIFD0Directory::class.java)
+
+            var orientation = 1
+            try {
+                orientation = exifIFD0Directory.getInt(ExifIFD0Directory.TAG_ORIENTATION)
+            } catch (ex: Exception) {
+                println("no orientation data")
+            }
+
+
+            when (orientation) {
+                1 -> {
+                }
+                2 // Flip X
+                -> scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_HORZ)
+                3 // PI rotation
+                -> scaledImg = Scalr.rotate(scaledImg, Rotation.CW_180)
+                4 // Flip Y
+                -> scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_VERT)
+                5 // - PI/2 and Flip X
+                -> {
+                    scaledImg = Scalr.rotate(scaledImg, Rotation.CW_90)
+                    scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_HORZ)
+                }
+                6 // -PI/2 and -width
+                -> scaledImg = Scalr.rotate(scaledImg, Rotation.CW_90)
+                7 // PI/2 and Flip
+                -> {
+                    scaledImg = Scalr.rotate(scaledImg, Rotation.CW_90)
+                    scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_VERT)
+                }
+                8 // PI / 2
+                -> scaledImg = Scalr.rotate(scaledImg, Rotation.CW_270)
+                else -> {
+                }
+            }
+            // ---- End orientation handling ----
+
+            ImageIO.write(scaledImg, "jpeg", thumbPhotoFile)
+        }
 
         return Pair(originalPhotoFile, thumbPhotoFile)
     }
