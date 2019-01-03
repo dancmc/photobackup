@@ -17,6 +17,7 @@ class Database {
         var initialised = false
         val bolt = BoltConnector("0")
         var graphDb = {
+            File(Main.databaseLocation).mkdirs()
             val g = GraphDatabaseFactory()
                     .newEmbeddedDatabaseBuilder(File(Main.databaseLocation))
                     .setConfig(bolt.type, "BOLT")

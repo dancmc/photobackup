@@ -59,9 +59,12 @@ object MiscRoutes {
         val sizeFolder = File(userFolder, sizeParam)
         val finalFile = File(sizeFolder, photoID)
 
-        response.header("Content-Type", "${if (isVideo && sizeParam=="original")"video" else "image"}/${if(isVideo && sizeParam=="thumb")"jpeg" else mime}")
+//        response.header("Content-Type", "${if (isVideo && sizeParam=="original")"video" else "image"}/${if(isVideo && sizeParam=="thumb")"jpeg" else mime}")
+        response.header("Content-Type", "$mime")
         println(finalFile.absolutePath)
         response.header("X-Accel-Redirect", finalFile.absolutePath)
+
+
     }
 
 }

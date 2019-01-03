@@ -17,6 +17,10 @@ import java.nio.file.StandardCopyOption
 import java.util.*
 import javax.imageio.ImageIO
 import kotlin.collections.ArrayList
+import java.io.InputStreamReader
+import java.io.BufferedReader
+
+
 
 
 object Utils {
@@ -100,9 +104,6 @@ object Utils {
         }
     }
 
-    fun constructPhotoUrl(size: String, photoID: String): String {
-        return "${Main.domain}/static/photos?size=$size&id=$photoID"
-    }
 
     fun deepCopy(bi: BufferedImage): BufferedImage {
         val cm = bi.colorModel
@@ -133,55 +134,89 @@ object Utils {
         val thumbPhotoFile = File(thumbFolder, photoID)
         if (isVideo){
 
-            // TODO create thumbnail with ffmpeg
+            println("video")
+            val thumbPhotoFileWithExt = File(thumbPhotoFile.path+".jpg")
+            val r = Runtime.getRuntime()
+            r.exec("ffmpeg -ss 00:00:01.000 -i ${originalPhotoFile.path}  -y -vframes 1 ${thumbPhotoFileWithExt.path}")
 
+            var tries = 10
+            while (!thumbPhotoFileWithExt.exists() && tries>0){
+                Thread.sleep(200)
+                tries--
+            }
+            thumbPhotoFileWithExt.renameTo(thumbPhotoFile)
 
         }else {
 
-            val originalImage = ImageIO.read(originalPhotoFile)
-            var scaledImg = Scalr.resize(originalImage, 200)
-
-            // ---- Begin orientation handling ----
-            val metadata = ImageMetadataReader.readMetadata(originalPhotoFile)
-            val exifIFD0Directory = metadata.getFirstDirectoryOfType(ExifIFD0Directory::class.java)
-
-            var orientation = 1
-            try {
-                orientation = exifIFD0Directory.getInt(ExifIFD0Directory.TAG_ORIENTATION)
-            } catch (ex: Exception) {
-                println("no orientation data")
+            var tries = 15
+            while (!originalPhotoFile.exists() && tries>0){
+                Thread.sleep(100)
+                tries--
             }
 
-
-            when (orientation) {
-                1 -> {
-                }
-                2 // Flip X
-                -> scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_HORZ)
-                3 // PI rotation
-                -> scaledImg = Scalr.rotate(scaledImg, Rotation.CW_180)
-                4 // Flip Y
-                -> scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_VERT)
-                5 // - PI/2 and Flip X
-                -> {
-                    scaledImg = Scalr.rotate(scaledImg, Rotation.CW_90)
-                    scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_HORZ)
-                }
-                6 // -PI/2 and -width
-                -> scaledImg = Scalr.rotate(scaledImg, Rotation.CW_90)
-                7 // PI/2 and Flip
-                -> {
-                    scaledImg = Scalr.rotate(scaledImg, Rotation.CW_90)
-                    scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_VERT)
-                }
-                8 // PI / 2
-                -> scaledImg = Scalr.rotate(scaledImg, Rotation.CW_270)
-                else -> {
-                }
+            val r = Runtime.getRuntime()
+            val p = r.exec("convert ${originalPhotoFile.path} -quality 75 -auto-orient -thumbnail 200x200 ${thumbPhotoFile.path}")
+            var input = BufferedReader(InputStreamReader(p.inputStream))
+            var line = input.readLine()
+            while (line != null) {
+                System.out.println(line)
+                line = input.readLine()
             }
-            // ---- End orientation handling ----
+            input.close()
 
-            ImageIO.write(scaledImg, "jpeg", thumbPhotoFile)
+            input = BufferedReader(InputStreamReader(p.errorStream))
+            line = input.readLine()
+            while (line != null) {
+                System.out.println(line)
+                line = input.readLine()
+            }
+            input.close()
+
+
+//            val originalImage = ImageIO.read(originalPhotoFile)
+//            var scaledImg = Scalr.resize(originalImage, 200)
+//
+//            // ---- Begin orientation handling ----
+//            val metadata = ImageMetadataReader.readMetadata(originalPhotoFile)
+//            val exifIFD0Directory = metadata.getFirstDirectoryOfType(ExifIFD0Directory::class.java)
+//
+//            var orientation = 1
+//            try {
+//                orientation = exifIFD0Directory.getInt(ExifIFD0Directory.TAG_ORIENTATION)
+//            } catch (ex: Exception) {
+//                println("no orientation data")
+//            }
+//
+//
+//            when (orientation) {
+//                1 -> {
+//                }
+//                2 // Flip X
+//                -> scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_HORZ)
+//                3 // PI rotation
+//                -> scaledImg = Scalr.rotate(scaledImg, Rotation.CW_180)
+//                4 // Flip Y
+//                -> scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_VERT)
+//                5 // - PI/2 and Flip X
+//                -> {
+//                    scaledImg = Scalr.rotate(scaledImg, Rotation.CW_90)
+//                    scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_HORZ)
+//                }
+//                6 // -PI/2 and -width
+//                -> scaledImg = Scalr.rotate(scaledImg, Rotation.CW_90)
+//                7 // PI/2 and Flip
+//                -> {
+//                    scaledImg = Scalr.rotate(scaledImg, Rotation.CW_90)
+//                    scaledImg = Scalr.rotate(scaledImg, Rotation.FLIP_VERT)
+//                }
+//                8 // PI / 2
+//                -> scaledImg = Scalr.rotate(scaledImg, Rotation.CW_270)
+//                else -> {
+//                }
+//            }
+//            // ---- End orientation handling ----
+//
+//            ImageIO.write(scaledImg, "jpeg", thumbPhotoFile)
         }
 
         return Pair(originalPhotoFile, thumbPhotoFile)
@@ -241,6 +276,7 @@ object Utils {
         }
         return Pair(0, 0)
     }
+
 }
 
 fun Request.decodeToken(): Any {

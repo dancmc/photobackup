@@ -12,7 +12,7 @@ buildscript {
 plugins { id 'com.github.johnrengelman.shadow' version '2.0.4' }
 
 group 'io.dancmc'
-version '0.1'
+
 
 apply plugin: 'java'
 apply plugin: 'kotlin'
@@ -44,7 +44,14 @@ dependencies {
     compile 'org.neo4j.driver:neo4j-java-driver:1.4.4'
     compile 'org.neo4j:neo4j-lucene-index:3.4.7'
     compile 'org.neo4j:neo4j-bolt:3.4.7'
-    compile 'de.mkammerer:argon2-jvm:2.2'
+    compile 'de.mkammerer:argon2-jvm:2.5'
+// https://mvnrepository.com/artifact/org.slf4j/slf4j-simple
+    compile group: 'org.slf4j', name: 'slf4j-simple', version: '1.7.25'
+// https://mvnrepository.com/artifact/org.slf4j/slf4j-api
+    compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
+
+
+
 }
 
 compileKotlin {

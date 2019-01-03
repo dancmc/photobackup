@@ -16,7 +16,7 @@ object UserRoutes {
             return@Route JSONObject().fail(-1, "Missing field")
         }
 
-        val user = User(userID = UUID.randomUUID().toString(), username = username, passwordHash = Utils.Password.hashPassword(password),
+        val user = User(userID = UUID.nameUUIDFromBytes(username.toByteArray()).toString(), username = username, passwordHash = Utils.Password.hashPassword(password),
                 email = email, emailVerified = false, firstName = firstName, lastName = lastName)
 
         val result = Database.addUser(user)

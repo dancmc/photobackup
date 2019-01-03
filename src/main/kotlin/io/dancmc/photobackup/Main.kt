@@ -11,17 +11,18 @@ import org.neo4j.internal.kernel.api.exceptions.KernelException
 import org.neo4j.kernel.impl.proc.Procedures
 import org.neo4j.kernel.internal.GraphDatabaseAPI
 import spark.Spark
+import java.io.BufferedReader
+import java.io.File
+import java.io.InputStreamReader
 
 class Main {
 
     companion object {
         val picNginxRoute = "/photobackup/files"
-        val picFolder = "/users/daniel/downloads/photobackup/photos"
-        val domain = "http://localhost:8080/photobackup/v1"
-        val databaseLocation = "/users/daniel/downloads/photobackup/photobackup_neo4j"
-//        val picFolder = "/mnt/www/instacopy/photos"
-//        val domain = "https://dancmc.io/instacopy/v1"
-//        val databaseLocation  = "/mnt/www/instacopy/social"
+//        val picFolder = "/users/daniel/downloads/photobackup/photos"
+        val picFolder = "/mnt/data/photobackup/photos"
+//        val databaseLocation = "/users/daniel/downloads/photobackup/photobackup_neo4j"
+        val databaseLocation = "/mnt/data/photobackup/photobackup_neo4j"
 
 
         @JvmStatic
@@ -63,6 +64,7 @@ class Main {
                     Spark.post("/upload", PhotoRoutes.upload)
                     Spark.post("/delete", PhotoRoutes.delete)
                     Spark.post("/edit", PhotoRoutes.edit)
+                    Spark.get("/metadata", PhotoRoutes.getMetadata)
                 }
 
                 Spark.path("/static") {
@@ -109,6 +111,32 @@ class Main {
 
                 return@runBlocking
             }
+
+            File("/mnt/data/photobackup/photos/2983f44f-e03d-312d-b739-881cabb3f1a0/original").listFiles().forEach {
+                val f = File("/mnt/data/photobackup/photos/2983f44f-e03d-312d-b739-881cabb3f1a0/thumb", it.name)
+                if(!f.exists()){
+                    val r = Runtime.getRuntime()
+                    val p = r.exec("convert $it -quality 75 -auto-orient -thumbnail 200x200 $f")
+                    var input = BufferedReader(InputStreamReader(p.inputStream))
+                    var line = input.readLine()
+                    while (line != null) {
+                        System.out.println(line)
+                        line = input.readLine()
+                    }
+                    input.close()
+
+                    input = BufferedReader(InputStreamReader(p.errorStream))
+                    line = input.readLine()
+                    while (line != null) {
+                        System.out.println(line)
+                        line = input.readLine()
+                    }
+                    input.close()
+                }
+            }
+            println("end")
+
+
         }
 
     }

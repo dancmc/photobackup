@@ -17,7 +17,7 @@ object PhotoRoutes {
     private fun completeQuery(userID: String): Pair<String, HashMap<String, Any>> {
         val params = hashMapOf<String, Any>()
         params["user_id"] = userID
-        return Pair("match (:User{user_id:\$user_id})-[:OWNS]->(p:Photo), (p)<-[c:CONTAINS]-(f:Folder), (p)<-[:DESCRIBES]-(t:Tag)\n" +
+        return Pair("match (:User{user_id:\$user_id})-[:OWNS]->(p:Photo), (p)<-[c:CONTAINS]-(f:Folder) optional match (p)<-[:DESCRIBES]-(t:Tag)\n" +
                 "return p as photo, collect(distinct {filename:c.filename,folderpath:f.folderpath}) as folders, collect(distinct(t.name)) as tags", params)
     }
 
@@ -39,7 +39,7 @@ object PhotoRoutes {
                 val photoNode = it["photo"] as Node
                 val deleted = photoNode.getProperty("deleted") as Boolean
 
-                if(getDeleted || !deleted) {
+                if (getDeleted || !deleted) {
                     val photoObject = JSONObject()
                     photoArray.put(photoObject)
 
@@ -51,6 +51,7 @@ object PhotoRoutes {
                     photoObject.put("mime", photoNode.getProperty("mime") as String)
                     photoObject.put("is_video", photoNode.getProperty("is_video") as Boolean)
                     photoObject.put("deleted", deleted)
+                    photoObject.put("date_taken", photoNode.getProperty("date_taken") as Long)
 
 
                     val folders = it["folders"] as ArrayList<HashMap<String?, String?>>
@@ -74,6 +75,72 @@ object PhotoRoutes {
 
     }
 
+    private fun metadataQuery(userID: String, photoID: String): Pair<String, HashMap<String, Any>> {
+        val params = hashMapOf<String, Any>()
+        params["user_id"] = userID
+        params["photo_id"] = photoID
+        return Pair("match (:User{user_id:\$user_id})-[:OWNS]->(p:Photo{photo_id:\$photo_id}), (p)<-[c:CONTAINS]-(f:Folder) optional match (p)<-[:DESCRIBES]-(t:Tag)\n" +
+                "return p as photo, collect(distinct {filename:c.filename,folderpath:f.folderpath}) as folders, collect(distinct(t.name)) as tags", params)
+    }
+
+    val getMetadata = Route { request, response ->
+        val userID = request.attribute("user") as String
+        val photoID = request.queryParamOrDefault("photo_id", "null")
+
+        Database.executeTransaction {
+
+            val query = metadataQuery(userID, photoID)
+            val results = it.execute(query.first, query.second)
+            val json = JSONObject()
+
+
+            Database.processResult(results) {
+
+                val photoNode = it["photo"] as Node
+                val photoObject = JSONObject()
+                json.put("photo", photoObject)
+
+                photoObject.put("md5", photoNode.getProperty("md5") as String)
+                photoObject.put("bytes", photoNode.getProperty("bytes") as Long)
+                photoObject.put("photo_id", photoNode.getProperty("photo_id") as String)
+                photoObject.put("notes", photoNode.getProperty("notes") as String)
+                photoObject.put("notes_updated", photoNode.getProperty("notes_updated") as Long)
+                photoObject.put("tags_updated", photoNode.getProperty("tags_updated") as Long)
+                photoObject.put("mime", photoNode.getProperty("mime") as String)
+                photoObject.put("is_video", photoNode.getProperty("is_video") as Boolean)
+                photoObject.put("deleted", photoNode.getProperty("deleted") as Boolean)
+                photoObject.put("date_taken", photoNode.getProperty("date_taken") as Long)
+
+
+                val folders = it["folders"] as ArrayList<HashMap<String?, String?>>
+                val foldersArray = JSONArray().apply {
+                    folders.forEach { folder ->
+                        this.put(JSONObject()
+                                .put("filename", folder["filename"])
+                                .put("folderpath", folder["folderpath"]))
+                    }
+                }
+                photoObject.put("folders", foldersArray)
+
+                val tags = it["tags"] as ArrayList<String>
+                val tagsArray = JSONArray().apply {
+                    tags.forEach {tag->
+                        this.put(tag)
+                    }
+                }
+                photoObject.put("tags", tagsArray)
+
+            }
+
+            if(json.has("photo")) {
+                return@executeTransaction json.success()
+            }else {
+                return@executeTransaction json.fail(message = "Photo not found")
+            }
+        } as JSONObject? ?: JSONObject().fail(message = "DB Fail")
+
+    }
+
     private fun uploadQuery(userID: String, md5: String, bytes: Long): Pair<String, HashMap<String, Any>> {
         val params = hashMapOf<String, Any>()
         params["user_id"] = userID
@@ -81,6 +148,16 @@ object PhotoRoutes {
         params["bytes"] = bytes
 
         return Pair("match (:User{user_id:\$user_id})-[:OWNS]->(p:Photo{md5:\$md5, bytes:\$bytes})\n" +
+                "return p as photo", params)
+    }
+
+    private fun sameFileQuery(userID: String,filename:String, folderpath:String): Pair<String, HashMap<String, Any>> {
+        val params = hashMapOf<String, Any>()
+        params["user_id"] = userID
+        params["filename"] = filename
+        params["folderpath"] = folderpath
+
+        return Pair("match (:User{user_id:\$user_id})-[:OWNS]->(p:Photo)<-[c:CONTAINS{filename:\$filename}]-(f:Folder{folderpath:\$folderpath})\n" +
                 "return p as photo", params)
     }
 
@@ -120,6 +197,7 @@ object PhotoRoutes {
         val tagsUpdated = requestJson.optLong("tags_updated")
         val notes = requestJson.optString("notes")
         val notesUpdated = requestJson.optLong("notes_updated")
+        val dateTaken = requestJson.optLong("date_taken")
 
         val mime = requestJson.optString("mime")
         val isVideo = requestJson.optBoolean("is_video")
@@ -141,11 +219,12 @@ object PhotoRoutes {
             return@executeTransaction count
         } as? Int? ?: 0
 
-
+        // if match md5 and bytes and not deleted, assume trying to upload duplicate
         if (count > 0 && !deleted) {
             return@Route JSONObject().fail(message = "Already exists")
         }
 
+        // if matched but deleted, just delete the whole node and reupload
         if (deleted) {
             Database.executeTransaction {
                 val query = detachDeleteQuery(userID, reportedMD5, bytes)
@@ -154,6 +233,21 @@ object PhotoRoutes {
                 return@executeTransaction null
             }
         }
+
+        // if unmatched
+        // check that there isn't a different photo with same filepath - we assume incoming file supersedes it, set to deleted
+        folders.forEach { f->
+            Database.executeTransaction {
+                val query = sameFileQuery(userID, f.second, f.first)
+                val results = it.execute(query.first, query.second)
+                Database.processResult(results){
+                    val node = it["photo"] as Node
+                    node.setProperty("deleted", true)
+                }
+                return@executeTransaction null
+            }
+        }
+
 
         val photoID = UUID.randomUUID().toString()
         val savedFiles = Utils.handleImage(userID, photoID, filepart.inputStream, isVideo)
@@ -168,6 +262,7 @@ object PhotoRoutes {
                 photoNode.setProperty("notes_updated", notesUpdated)
                 photoNode.setProperty("tags_updated", tagsUpdated)
                 photoNode.setProperty("mime", mime)
+                photoNode.setProperty("date_taken", dateTaken)
                 photoNode.setProperty("is_video", isVideo)
                 photoNode.setProperty("deleted", false)
 
@@ -287,7 +382,7 @@ object PhotoRoutes {
             editMap[photoID] = obj
         }
 
-        Database.executeTransaction {db->
+        Database.executeTransaction { db ->
             val query = editQuery(userID, editList)
             val results = db.execute(query.first, query.second)
             val json = JSONObject()
@@ -300,7 +395,7 @@ object PhotoRoutes {
 
                 if (jsonObj != null) {
 
-                    if(jsonObj.has("folders")) {
+                    if (jsonObj.has("folders")) {
                         val folderArray = jsonObj.optJSONArray("folders") ?: JSONArray()
 
                         val folderRels = photoNode.getRelationships(RelationshipType { "CONTAINS" })
