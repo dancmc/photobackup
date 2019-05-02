@@ -4,8 +4,8 @@ import apoc.cypher.Cypher
 import apoc.help.Help
 import apoc.text.Strings
 import com.auth0.jwt.interfaces.DecodedJWT
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.runBlocking
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.neo4j.internal.kernel.api.exceptions.KernelException
 import org.neo4j.kernel.impl.proc.Procedures
@@ -19,10 +19,10 @@ class Main {
 
     companion object {
         val picNginxRoute = "/photobackup/files"
-//        val picFolder = "/users/daniel/downloads/photobackup/photos"
-        val picFolder = "/mnt/data/photobackup/photos"
-//        val databaseLocation = "/users/daniel/downloads/photobackup/photobackup_neo4j"
-        val databaseLocation = "/mnt/data/photobackup/photobackup_neo4j"
+        val picFolder = "/volumes/seagatebackup/photobackup/photos"
+//        val picFolder = "/mnt/data/photobackup/photos"
+        val databaseLocation = "/volumes/seagatebackup/photobackup/photobackup_neo4j"
+//        val databaseLocation = "/mnt/data/photobackup/photobackup_neo4j"
 
 
         @JvmStatic
@@ -112,29 +112,7 @@ class Main {
                 return@runBlocking
             }
 
-            File("/mnt/data/photobackup/photos/2983f44f-e03d-312d-b739-881cabb3f1a0/original").listFiles().forEach {
-                val f = File("/mnt/data/photobackup/photos/2983f44f-e03d-312d-b739-881cabb3f1a0/thumb", it.name)
-                if(!f.exists()){
-                    val r = Runtime.getRuntime()
-                    val p = r.exec("convert $it -quality 75 -auto-orient -thumbnail 200x200 $f")
-                    var input = BufferedReader(InputStreamReader(p.inputStream))
-                    var line = input.readLine()
-                    while (line != null) {
-                        System.out.println(line)
-                        line = input.readLine()
-                    }
-                    input.close()
 
-                    input = BufferedReader(InputStreamReader(p.errorStream))
-                    line = input.readLine()
-                    while (line != null) {
-                        System.out.println(line)
-                        line = input.readLine()
-                    }
-                    input.close()
-                }
-            }
-            println("end")
 
 
         }

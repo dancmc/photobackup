@@ -1,6 +1,7 @@
 package io.dancmc.photobackup
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.launch
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import spark.Route
 
@@ -20,7 +21,7 @@ object AdminRoutes {
     }
 
     val kill = Route { request, response ->
-        launch {
+        GlobalScope.launch {
             delay(2000)
             System.exit(0)
         }
