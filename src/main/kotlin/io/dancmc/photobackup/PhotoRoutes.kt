@@ -1,13 +1,21 @@
 package io.dancmc.photobackup
 
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
+import org.neo4j.graphdb.Direction
 import org.neo4j.graphdb.Label
 import org.neo4j.graphdb.Node
 import org.neo4j.graphdb.RelationshipType
 import spark.Route
 import java.io.File
+import java.lang.StringBuilder
 import java.util.*
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import javax.servlet.MultipartConfigElement
 import kotlin.collections.ArrayList
 import kotlin.collections.HashSet
@@ -25,53 +33,171 @@ object PhotoRoutes {
         val userID = request.attribute("user") as String
         val getDeleted = request.queryParamOrDefault("deleted", "false")!!.toBoolean()
 
-        Database.executeTransaction {
+        val doTransaction = {
+            Database.executeTransaction { db ->
 
-            val query = completeQuery(userID)
-            val results = it.execute(query.first, query.second)
-            val json = JSONObject().success()
-            val photoArray = JSONArray()
-            json.put("photos", photoArray)
+                var time = System.currentTimeMillis()
+
+                val query = completeQuery(userID)
+                val results = db.execute(query.first, query.second)
+                val json = JSONObject().success()
+                val photoArray = JSONArray()
+                json.put("photos", photoArray)
+
+                println("Get Complete Db call ${System.currentTimeMillis() - time}ms")
+                time = System.currentTimeMillis()
+
+                Database.processResult(results) {
+
+                    val photoNode = it["photo"] as Node
+                    val deleted = photoNode.getProperty("deleted") as Boolean
+
+                    if (getDeleted || !deleted) {
+                        val photoObject = JSONObject()
+                        photoArray.put(photoObject)
+
+                        photoObject.put("md5", photoNode.getProperty("md5") as String)
+                        photoObject.put("bytes", photoNode.getProperty("bytes") as Long)
+                        photoObject.put("photo_id", photoNode.getProperty("photo_id") as String)
+                        photoObject.put("notes_updated", photoNode.getProperty("notes_updated") as Long)
+                        photoObject.put("tags_updated", photoNode.getProperty("tags_updated") as Long)
+                        photoObject.put("mime", photoNode.getProperty("mime") as String)
+                        photoObject.put("is_video", photoNode.getProperty("is_video") as Boolean)
+                        photoObject.put("deleted", deleted)
+                        photoObject.put("date_taken", photoNode.getProperty("date_taken") as Long)
 
 
-            Database.processResult(results) {
-
-                val photoNode = it["photo"] as Node
-                val deleted = photoNode.getProperty("deleted") as Boolean
-
-                if (getDeleted || !deleted) {
-                    val photoObject = JSONObject()
-                    photoArray.put(photoObject)
-
-                    photoObject.put("md5", photoNode.getProperty("md5") as String)
-                    photoObject.put("bytes", photoNode.getProperty("bytes") as Long)
-                    photoObject.put("photo_id", photoNode.getProperty("photo_id") as String)
-                    photoObject.put("notes_updated", photoNode.getProperty("notes_updated") as Long)
-                    photoObject.put("tags_updated", photoNode.getProperty("tags_updated") as Long)
-                    photoObject.put("mime", photoNode.getProperty("mime") as String)
-                    photoObject.put("is_video", photoNode.getProperty("is_video") as Boolean)
-                    photoObject.put("deleted", deleted)
-                    photoObject.put("date_taken", photoNode.getProperty("date_taken") as Long)
-
-
-                    val folders = it["folders"] as ArrayList<HashMap<String?, String?>>
-                    val foldersArray = JSONArray().apply {
-                        folders.forEach { folder ->
-                            this.put(JSONObject()
-                                    .put("filename", folder["filename"])
-                                    .put("folderpath", folder["folderpath"]))
+                        val folders = it["folders"] as ArrayList<HashMap<String?, String?>>
+                        val foldersArray = JSONArray().apply {
+                            folders.forEach { folder ->
+                                this.put(JSONObject()
+                                        .put("filename", folder["filename"])
+                                        .put("folderpath", folder["folderpath"]))
+                            }
                         }
-                    }
-                    photoObject.put("folders", foldersArray)
+                        photoObject.put("folders", foldersArray)
 
-                    val tags = it["tags"] as ArrayList<String>
-                    photoObject.put("number_tags", tags.size)
+                        val tags = it["tags"] as ArrayList<String>
+                        photoObject.put("number_tags", tags.size)
+                    }
+
                 }
 
+                println("json processing ${System.currentTimeMillis() - time}ms")
+
+                return@executeTransaction json
+            } as JSONObject? ?: JSONObject().fail(message = "DB Fail")
+        }
+
+        val job1 = GlobalScope.async { doTransaction.invoke() }
+
+
+        runBlocking {
+            val result = job1.await()
+
+            return@runBlocking result
+        }
+
+    }
+
+
+    val completeAlt = Route { request, response ->
+        val userID = request.attribute("user") as String
+        val getDeleted = request.queryParamOrDefault("deleted", "false")!!.toBoolean()
+
+
+
+
+        var time = System.currentTimeMillis()
+        var photoArray =  Vector<String>()
+
+
+        Database.executeTransaction { db ->
+            val user = db.findNode({"User"}, "user_id", userID)
+            val photos = user.getRelationships({ "OWNS" }, Direction.OUTGOING)
+            val photoCount = photos.count()
+
+            photoArray = Vector<String>(photoCount)
+
+
+            var count = 0
+
+            fun processNode(photoNode:Node){
+                Database.executeTransaction {
+                    val deleted = photoNode.getProperty("deleted") as Boolean
+
+                    if (getDeleted || !deleted) {
+                        val photoObject = JSONObject()
+
+                        photoObject.put("md5", photoNode.getProperty("md5") as String)
+                        photoObject.put("bytes", photoNode.getProperty("bytes") as Long)
+                        photoObject.put("photo_id", photoNode.getProperty("photo_id") as String)
+                        photoObject.put("notes_updated", photoNode.getProperty("notes_updated") as Long)
+                        photoObject.put("tags_updated", photoNode.getProperty("tags_updated") as Long)
+                        photoObject.put("mime", photoNode.getProperty("mime") as String)
+                        photoObject.put("is_video", photoNode.getProperty("is_video") as Boolean)
+                        photoObject.put("deleted", deleted)
+                        photoObject.put("date_taken", photoNode.getProperty("date_taken") as Long)
+
+                        val foldersArray = JSONArray()
+                        photoObject.put("folders", foldersArray)
+                        photoNode.getRelationships({ "CONTAINS" }, Direction.INCOMING).forEach { r ->
+                            val folderNode = r.startNode
+                            foldersArray.put(JSONObject()
+                                    .put("filename", r.getProperty("filename"))
+                                    .put("folderpath", folderNode.getProperty("folderpath")))
+
+                        }
+
+                        val tagCount = photoNode.getRelationships({ "DESCRIBES" }, Direction.INCOMING).count()
+                        photoObject.put("number_tags", tagCount)
+
+                        photoArray.add(photoObject.toString())
+                    }
+                }
             }
 
-            return@executeTransaction json
-        } as JSONObject? ?: JSONObject().fail(message = "DB Fail")
+            val executorService = Executors.newFixedThreadPool(3)
+            val parallelThreshold = photoCount/4*3
+
+            photos.forEach dkal@{ p->
+
+                val photoNode = p.endNode
+
+                if (count<parallelThreshold){
+                    executorService.execute { processNode(photoNode) }
+                }else{
+                    processNode(photoNode)
+                }
+
+                count++
+            }
+
+            executorService.shutdown()
+            executorService.awaitTermination(60000, TimeUnit.MILLISECONDS)
+
+            println(photoArray.size)
+            println("Count : $count")
+            println("Get Complete Db call ${System.currentTimeMillis() - time}ms")
+
+        } ?: return@Route JSONObject().fail(message = "DB Fail")
+
+        time = System.currentTimeMillis()
+
+        val returnString = kotlin.run{
+            val successPrefix = JSONObject().success().toString()
+
+            val sb = StringJoiner(",", successPrefix.substring(0,successPrefix.length-1)+",photos:[", "]}")
+            photoArray.forEach {
+                sb.add(it)
+            }
+            sb.toString()
+        }
+
+        println("Convert String ${System.currentTimeMillis() - time}ms")
+
+
+        returnString
 
     }
 

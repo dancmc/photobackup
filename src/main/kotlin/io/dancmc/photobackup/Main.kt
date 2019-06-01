@@ -19,10 +19,10 @@ class Main {
 
     companion object {
         val picNginxRoute = "/photobackup/files"
-        val picFolder = "/volumes/seagatebackup/photobackup/photos"
-//        val picFolder = "/mnt/data/photobackup/photos"
-        val databaseLocation = "/volumes/seagatebackup/photobackup/photobackup_neo4j"
-//        val databaseLocation = "/mnt/data/photobackup/photobackup_neo4j"
+//        val picFolder = "/volumes/seagatebackup/photobackup/photos"
+        val picFolder = "/mnt/data/photobackup/photos"
+//        val databaseLocation = "/volumes/seagatebackup/photobackup/photobackup_neo4j"
+        val databaseLocation = "/mnt/data/photobackup/photobackup_neo4j"
 
 
         @JvmStatic
@@ -60,7 +60,7 @@ class Main {
                 }
 
                 Spark.path("/photo") {
-                    Spark.get("/complete", PhotoRoutes.complete)
+                    Spark.get("/complete", PhotoRoutes.completeAlt)
                     Spark.post("/upload", PhotoRoutes.upload)
                     Spark.post("/delete", PhotoRoutes.delete)
                     Spark.post("/edit", PhotoRoutes.edit)
