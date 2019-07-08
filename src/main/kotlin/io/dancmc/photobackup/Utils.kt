@@ -112,13 +112,15 @@ object Utils {
         return BufferedImage(cm, raster, isAlphaPremultiplied, null)
     }
 
-    fun handleImage(userID: String, photoID:String, inputstream: InputStream, isVideo:Boolean):Pair<File,File>{
+    fun handleImage(userID: String, photoID:String, inputstream: InputStream, isVideo:Boolean):UploadResult{
 
         val userFolder = File(Main.picFolder, userID)
         val originalFolder = File(userFolder, "original")
         val thumbFolder = File(userFolder, "thumb")
 
         val originalPhotoFile = File(originalFolder, photoID)
+        val thumbPhotoFile = File(thumbFolder, photoID)
+
         thumbFolder.mkdirs()
         originalFolder.mkdirs()
 
@@ -127,11 +129,16 @@ object Utils {
             try {
                  Files.copy(input, originalPhotoFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }catch(e:Exception){
+                Thread.sleep(100)
+                if(originalPhotoFile.exists()){
+                    originalPhotoFile.delete()
+                }
                 println(e.message)
+                return UploadResult(false, originalPhotoFile, thumbPhotoFile)
             }
         }
 
-        val thumbPhotoFile = File(thumbFolder, photoID)
+
         if (isVideo){
 
             println("video")
@@ -144,7 +151,11 @@ object Utils {
                 Thread.sleep(200)
                 tries--
             }
-            thumbPhotoFileWithExt.renameTo(thumbPhotoFile)
+
+            // ffmpeg takes cue from thumbnail extension, but we don't need ext so we remove it after
+            if(thumbPhotoFileWithExt.exists()) {
+                thumbPhotoFileWithExt.renameTo(thumbPhotoFile)
+            }
 
         }else {
 
@@ -167,7 +178,7 @@ object Utils {
             input = BufferedReader(InputStreamReader(p.errorStream))
             line = input.readLine()
             while (line != null) {
-                System.out.println(line)
+                println(line)
                 line = input.readLine()
             }
             input.close()
@@ -219,7 +230,7 @@ object Utils {
 //            ImageIO.write(scaledImg, "jpeg", thumbPhotoFile)
         }
 
-        return Pair(originalPhotoFile, thumbPhotoFile)
+        return UploadResult(true, originalPhotoFile, thumbPhotoFile)
     }
 
     object Token {
